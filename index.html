@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<title>セルキャン式営業資料プロンプト作成ツール</title>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f7f6f3;
+  --lane:rgba(20,20,20,.04);
+  --paper:#ffffff;
+  --paper-2:#f3f1ec;
+  --rule:#dedbd4;
+  --ink:#141414;
+  --ink-soft:#333333;
+  --muted:#6b5f5a;
+  --on-ink:#ffffff;
+  --on-ink-soft:#c9c6c0;
+  --orange:#f15820;
+  --orange-deep:#c2410c;
+  --orange-soft:#fdece4;
+  --r:10px;
+  --r-s:6px;
+  --f-en:"Orbitron","Noto Sans JP","Hiragino Kaku Gothic ProN",sans-serif;
+  --f-jp:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+  --f-num:"Inter","Noto Sans JP",system-ui,sans-serif;
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;min-height:100vh;
+  background-color:var(--bg);
+  background-image:repeating-linear-gradient(112deg, transparent 0 58px, var(--lane) 58px 60px);
+  color:var(--ink);font-family:var(--f-jp);font-weight:500;font-size:16px;line-height:1.75;
+  display:flex;flex-direction:column;align-items:center;
+  padding:max(16px,env(safe-area-inset-top)) 16px max(32px,env(safe-area-inset-bottom));
+}
+[hidden]{display:none!important;}
+.machine{width:100%;max-width:760px;display:flex;flex-direction:column;gap:12px;}
+
+/* 上の帯 */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;flex-wrap:wrap;background:var(--ink);color:var(--on-ink);border-radius:var(--r);padding:10px 14px;}
+.logo{display:flex;flex-direction:column;line-height:1.2;min-width:0;}
+.logo b{font-weight:900;font-style:italic;font-size:1rem;letter-spacing:.04em;}
+.logo b i{color:var(--orange);font-style:inherit;}
+.logo small{font-size:.68rem;font-weight:700;letter-spacing:.1em;color:var(--on-ink-soft);}
+.steps{display:flex;gap:5px;align-items:center;flex-wrap:nowrap;}
+.steps .stl{font-family:var(--f-en);font-weight:900;font-size:.62rem;letter-spacing:.16em;color:var(--on-ink-soft);margin-right:3px;}
+.step{font-family:var(--f-num);font-size:.78rem;font-weight:800;color:var(--on-ink-soft);border:1.5px solid #4a4a4a;border-radius:4px;min-width:28px;height:24px;padding:0 7px;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background .2s,color .2s;}
+.step.done{background:var(--on-ink);color:var(--ink);border-color:var(--on-ink);}
+.step.now{background:var(--orange);color:var(--ink);border-color:var(--orange);box-shadow:0 0 0 3px rgba(241,88,32,.28),0 0 14px rgba(241,88,32,.55);}
+.pips{display:inline-flex;gap:2px;}
+.pip{width:5px;height:10px;border:1.5px solid currentColor;border-radius:1px;transform:skewX(-12deg);}
+.pip.on{background:currentColor;}
+
+/* 画面 */
+.screen{background:var(--paper);border:2px solid var(--ink);border-radius:var(--r);padding:22px 20px;display:flex;flex-direction:column;gap:16px;min-width:0;}
+.screen > *{min-width:0;}
+.screen.center{text-align:center;align-items:center;}
+.screen:focus{outline:none;}
+
+/* 声かけの窓 */
+.dialog{background:var(--ink);color:var(--on-ink);border-radius:var(--r);padding:14px 18px;display:flex;gap:14px;align-items:flex-start;text-align:left;}
+.face{flex:none;width:48px;height:48px;border-radius:50%;background:var(--orange);color:var(--ink);display:flex;align-items:center;justify-content:center;}
+.talk{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;}
+.speaker{font-family:var(--f-en);font-weight:900;font-size:.72rem;letter-spacing:.16em;color:var(--orange);}
+.speaker small{font-family:var(--f-jp);font-weight:700;letter-spacing:.08em;color:var(--on-ink-soft);margin-left:8px;font-size:.72rem;}
+.dialog p{margin:0;font-size:1.06rem;font-weight:700;line-height:1.85;overflow-wrap:anywhere;}
+.dialog.guide p{font-size:1rem;font-weight:500;line-height:1.95;}
+
+/* ボタン */
+.controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center;}
+.controls .spacer{flex:1;}
+.controls.sticky{position:sticky;bottom:0;z-index:2;background:var(--paper);margin:0 -20px -22px;padding:12px 20px 16px;border-top:1.5px solid var(--rule);border-radius:0 0 var(--r) var(--r);}
+button{font-family:var(--f-jp);font-weight:700;font-size:1rem;letter-spacing:.02em;background:var(--paper);color:var(--ink);border:2px solid var(--ink);border-radius:var(--r-s);padding:10px 18px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .08s;line-height:1.5;}
+button:hover{background:var(--paper-2);}
+button:active{transform:translateY(2px);}
+button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--orange);outline-offset:3px;}
+textarea:focus,input[type=text]:focus{outline:none;box-shadow:0 0 0 4px rgba(20,20,20,.12);}
+button.primary{background:var(--orange);border-color:var(--orange);font-weight:900;font-style:italic;padding-inline:28px;clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);border-radius:0;}
+button.primary:hover{background:var(--orange);filter:brightness(1.07);}
+button.primary:focus-visible{clip-path:none;border-radius:var(--r-s);outline-color:var(--ink);}
+button.primary .arw{display:inline-block;margin-left:8px;font-style:normal;font-size:.8em;}
+button.ghost{border-width:1.5px;padding:8px 14px;font-size:.92rem;background:transparent;}
+button.ghost:hover{background:var(--paper-2);}
+button.link{border:0;background:none;padding:6px 2px;font-size:.92rem;color:var(--ink-soft);text-decoration:underline;text-underline-offset:4px;}
+button[disabled]{opacity:.38;cursor:not-allowed;filter:grayscale(.3);}
+button[disabled]:active{transform:none;}
+
+/* 開始 */
+.mark{color:var(--ink);}
+.title-en{font-family:var(--f-en);font-weight:900;font-style:italic;font-size:.78rem;letter-spacing:.3em;color:var(--muted);margin:0;}
+.title-h{font-weight:900;font-style:italic;font-size:clamp(1.7rem,6.6vw,2.6rem);line-height:1.28;letter-spacing:.01em;margin:0;}
+.title-h span{display:block;}
+.title-h em{font-style:inherit;color:var(--orange);}
+.gets{list-style:none;margin:0;padding:0;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+.gets li{font-weight:900;font-size:.88rem;border:1.5px solid var(--ink);border-radius:3px;padding:3px 12px;background:var(--paper);}
+.gets li::before{content:"";display:inline-block;width:8px;height:8px;background:var(--ink);margin-right:8px;transform:skewX(-12deg);vertical-align:1px;}
+.prep{border:2px solid var(--ink);border-radius:var(--r-s);background:var(--paper-2);padding:14px 16px;display:flex;flex-direction:column;gap:10px;text-align:left;}
+.prep-h{font-weight:900;font-size:.95rem;display:flex;align-items:center;gap:8px;}
+.prep-h .tag{font-family:var(--f-en);font-size:.62rem;letter-spacing:.14em;background:var(--ink);color:var(--on-ink);padding:2px 8px;border-radius:2px;transform:skewX(-10deg);}
+.prep p{margin:0;font-size:.95rem;line-height:1.8;}
+.prep button{align-self:flex-start;}
+.small-note{font-size:.8rem;color:var(--muted);line-height:1.7;margin:0;}
+
+/* 扉 */
+.door{position:relative;overflow:hidden;}
+.door-no{display:flex;align-items:baseline;gap:10px;}
+.door-no .en{font-family:var(--f-en);font-weight:900;font-style:italic;font-size:.9rem;letter-spacing:.24em;color:var(--orange-deep);}
+.door-no .big{font-family:var(--f-num);font-weight:900;font-style:italic;font-size:4.4rem;line-height:1;color:var(--ink);}
+.door-h{margin:0;font-weight:900;font-style:italic;font-size:clamp(1.4rem,5.4vw,2rem);line-height:1.35;}
+.door-h small{display:block;font-size:.55em;font-style:normal;font-weight:700;color:var(--ink-soft);margin-top:4px;}
+.door-meta{font-weight:700;font-size:.9rem;color:var(--ink-soft);}
+.door-meta b{font-family:var(--f-num);font-weight:900;color:var(--ink);font-size:1.05rem;margin:0 2px;}
+.door > *{position:relative;z-index:1;}
+.door > .slash{position:absolute;z-index:0;right:-30px;top:-10px;width:170px;height:170px;-webkit-mask-image:linear-gradient(200deg,#000 40%,transparent 100%);mask-image:linear-gradient(200deg,#000 40%,transparent 100%);background:repeating-linear-gradient(112deg,transparent 0 18px,rgba(241,88,32,.10) 18px 30px);pointer-events:none;}
+
+/* 問い */
+.qbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.qnum{font-family:var(--f-num);font-size:.8rem;font-weight:900;letter-spacing:.04em;background:var(--ink);color:var(--on-ink);border-radius:3px;padding:2px 10px;white-space:nowrap;transform:skewX(-10deg);}
+.qnum b{color:var(--orange);font-size:1rem;}
+.qstage{font-size:.82rem;font-weight:700;color:var(--ink-soft);}
+.req{font-size:.74rem;font-weight:900;border-radius:3px;padding:1px 8px;margin-left:auto;white-space:nowrap;}
+.req.must{background:var(--orange-soft);color:var(--orange-deep);border:1.5px solid var(--orange);}
+.req.opt{color:var(--muted);border:1.5px solid var(--rule);}
+.bar{height:6px;background:var(--paper-2);border-radius:3px;overflow:hidden;border:1px solid var(--rule);}
+.bar i{display:block;height:100%;background:var(--ink);transition:width .25s;}
+.group{font-size:.82rem;font-weight:900;color:var(--ink-soft);display:flex;align-items:center;gap:8px;}
+.group::before{content:"";width:14px;height:2px;background:var(--ink);}
+.ex{border-left:4px solid var(--orange);background:var(--paper-2);padding:8px 12px;font-size:.92rem;line-height:1.8;color:var(--ink-soft);border-radius:0 var(--r-s) var(--r-s) 0;overflow-wrap:anywhere;}
+.field{display:flex;flex-direction:column;gap:6px;}
+.field .how{font-size:.8rem;font-weight:700;color:var(--muted);}
+input[type=text],textarea{width:100%;font-family:var(--f-jp);font-size:16px;font-weight:500;line-height:1.8;color:var(--ink);background:var(--paper);border:2px solid var(--ink);border-radius:var(--r-s);padding:10px 12px;}
+textarea{min-height:200px;resize:vertical;}
+input[type=text]{height:52px;}
+input::placeholder,textarea::placeholder{color:#9a928d;}
+.picks{display:flex;flex-direction:column;gap:8px;}
+.pick{display:flex;align-items:center;gap:12px;text-align:left;font-weight:700;border-width:1.5px;padding:12px 14px;width:100%;}
+.pick .box{flex:none;width:22px;height:22px;border:2px solid var(--ink);display:inline-flex;align-items:center;justify-content:center;background:var(--paper);}
+.pick.radio .box{border-radius:50%;}
+.pick .lbl{display:flex;flex-direction:column;line-height:1.5;}
+.pick .lbl small{font-weight:500;font-size:.82rem;color:var(--ink-soft);}
+.pick[aria-checked="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink);}
+.pick[aria-checked="true"] .lbl small{color:var(--on-ink-soft);}
+.pick[aria-checked="true"] .box{border-color:var(--orange);background:var(--orange);}
+.pick[aria-checked="true"] .box::after{content:"";width:10px;height:6px;border-left:3px solid var(--ink);border-bottom:3px solid var(--ink);transform:rotate(-45deg) translate(1px,-1px);}
+.pick.radio[aria-checked="true"] .box::after{width:8px;height:8px;border:0;background:var(--ink);border-radius:50%;transform:none;}
+.hint:empty{display:none;}
+.hint{font-size:.8rem;color:var(--muted);min-height:1.4em;margin:0;}
+
+/* 確認 */
+.ch{margin:0;font-weight:900;font-style:italic;font-size:1.35rem;}
+.notice{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--orange);background:var(--orange-soft);border-radius:var(--r-s);padding:10px 12px;font-size:.9rem;font-weight:700;line-height:1.7;}
+.notice .mk{flex:none;}
+.sum{display:flex;gap:10px;flex-wrap:wrap;font-size:.86rem;font-weight:700;color:var(--ink-soft);}
+.sum b{font-family:var(--f-num);font-weight:900;color:var(--ink);}
+.sec{display:flex;flex-direction:column;}
+.sec-h{display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--on-ink);padding:8px 12px;border-radius:var(--r-s) var(--r-s) 0 0;font-weight:900;font-size:.92rem;}
+.sec-h .en{font-family:var(--f-en);font-size:.62rem;letter-spacing:.16em;color:var(--orange);}
+.rows{border:1.5px solid var(--ink);border-top:0;border-radius:0 0 var(--r-s) var(--r-s);}
+.row{display:grid;grid-template-columns:2.4em minmax(0,1fr) auto;gap:4px 10px;padding:10px 12px;border-bottom:1px solid var(--rule);align-items:start;}
+.row:last-child{border-bottom:0;}
+.row .no{font-family:var(--f-num);font-weight:900;font-size:.9rem;color:var(--muted);padding-top:1px;}
+.row .q{font-size:.84rem;font-weight:700;color:var(--ink-soft);line-height:1.6;}
+.row .a{grid-column:2;font-size:.95rem;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;max-height:8.8em;overflow:hidden;position:relative;}
+.row .a.empty{white-space:normal;}
+.row .fix{grid-column:3;grid-row:1 / span 2;align-self:center;padding:6px 12px;font-size:.85rem;}
+.mis{display:inline-block;font-size:.76rem;font-weight:900;color:var(--orange-deep);border:1.5px dashed var(--orange);border-radius:3px;padding:0 8px;}
+.mis.req{color:var(--on-ink);background:var(--orange-deep);border-style:solid;}
+
+/* 完成 */
+.out-wrap{position:relative;}
+.out{margin:0;background:var(--paper-2);color:var(--ink);border:1.5px solid var(--ink);border-radius:var(--r-s);padding:16px 16px 20px;max-height:min(62vh,560px);overflow:auto;font-family:var(--f-jp);font-size:.9rem;line-height:1.95;white-space:pre-wrap;word-break:break-word;overscroll-behavior:contain;}
+.out mark{background:linear-gradient(transparent 60%, var(--orange-soft) 60%);color:inherit;font-weight:700;}
+.out mark.na{background:none;color:var(--orange-deep);}
+.copybar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+.copied{font-weight:900;font-size:.95rem;color:var(--orange-deep);min-height:1.5em;}
+.meta{font-size:.82rem;color:var(--muted);font-family:var(--f-num);}
+
+/* 一覧（重ね） */
+.overlay{position:fixed;inset:0;background:rgba(20,20,20,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10;}
+.sheet{background:var(--paper);border:2px solid var(--ink);border-radius:var(--r);width:100%;max-width:680px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden;}
+.sheet-h{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);color:var(--on-ink);padding:10px 14px;}
+.sheet-h b{font-weight:900;font-style:italic;}
+.sheet-h button{background:transparent;color:var(--on-ink);border-color:#5a5a5a;padding:4px 12px;font-size:.88rem;}
+.sheet-h button:hover{background:#2a2a2a;}
+.sheet-b{overflow:auto;padding:16px;display:flex;flex-direction:column;gap:14px;}
+.sheet-b h3{margin:0;font-size:.95rem;font-weight:900;}
+.sheet-b h3 .en{font-family:var(--f-en);font-size:.62rem;letter-spacing:.16em;color:var(--orange-deep);margin-right:8px;}
+.sheet-b h4{margin:6px 0 0;font-size:.82rem;font-weight:900;color:var(--ink-soft);}
+.sheet-b ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;}
+.sheet-b li{display:grid;grid-template-columns:2.2em minmax(0,1fr);gap:8px;font-size:.92rem;line-height:1.7;}
+.sheet-b li .no{font-family:var(--f-num);font-weight:900;color:var(--muted);}
+.sheet-f{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap;padding:12px 14px;border-top:1.5px solid var(--rule);}
+
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+
+@media (max-width:600px){
+  body{padding-inline:12px;}
+  .screen{padding:18px 14px;gap:14px;}
+  .dialog{padding:12px 13px;gap:10px;}
+  .face{width:40px;height:40px;}
+  .face svg{width:24px;height:24px;}
+  .dialog p{font-size:1rem;}
+  .steps .stl{display:none;}
+  .step{min-width:24px;padding:0 5px;}
+  .step .pips{display:none;}
+  .controls button{flex:1 1 auto;min-width:0;padding-inline:12px;}
+  .controls button.primary{flex:1 1 100%;order:-1;padding-block:13px;}
+  .controls .spacer{display:none;}
+  .row{grid-template-columns:1.7em minmax(0,1fr) auto;padding:10px;}
+  .row .fix{grid-row:1;align-self:start;padding:4px 10px;font-size:.8rem;flex:none;}
+  .row .a{grid-column:2 / span 2;}
+  .controls.sticky{margin:0 -14px -18px;padding:10px 14px 12px;}
+  .out{max-height:52vh;}
+  textarea{min-height:180px;}
+  .door-no .big{font-size:3.6rem;}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="machine">
+  <header class="topbar">
+    <div class="logo"><b>セルキャン<i>式</i></b><small>営業資料プロンプト作成ツール</small></div>
+    <div class="steps" id="steps" aria-label="ステージの進み具合"></div>
+  </header>
+  <main class="screen" id="screen" tabindex="-1" aria-live="polite"></main>
+</div>
+<div class="overlay" id="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ovh"></div>
+
+<script>
+"use strict";
+/* 中身は正本（質問票と指示文ひな形）から機械的に差し込んでいます。文言を手で変えないこと。 */
+const STAGES = [{"n": 0, "name": "はじめに（案件の確認）", "guide": null}, {"n": 1, "name": "お客様の声を集める（案件の企業に聞いてきた答え）", "guide": "資料は、構成が正しくても、お客様の理解が無いと外れます。ここからは、案件の企業の担当者に聞いてきたことを、お客様が実際に使った言葉のまま書いてください。要約しなくて大丈夫です。"}, {"n": 2, "name": "お客様が買う理由を一文にする", "guide": "次の一文の空欄を、1つずつ埋めていきます。『【対象のお客様】が【最終的に得たい状態】を実現するには、【成功パターン】が必要です。しかし、【今の障害】があるため自力では難しい。【企業名】は【独自の方法・強み】によって【期間】で【到達状態】を目指せるため、【費用】を投じる合理性があります。』この一文が固まってから、資料の中身に進みます。"}, {"n": 3, "name": "価値の伝え方を決める", "guide": null}, {"n": 4, "name": "毎回変えない部分を固める", "guide": null}];
+const QS = [{"n": 1, "stage": 0, "group": null, "text": "これから営業資料を設計する案件の、企業名を教えてください。", "ex": null, "req": true, "var": "company_name", "type": "短文"}, {"n": 2, "stage": 0, "group": null, "text": "その商品・サービスの名前を教えてください。何をしてくれるサービスか、名前で連想できるのが理想です。", "ex": "例：○○運用代行／○○事業部代行／○○構築支援／○○伴走型支援／○○実装プロジェクト", "req": true, "var": "service_name", "type": "短文"}, {"n": 3, "stage": 0, "group": null, "text": "「代行」と名乗る場合は、実際にどこまで代わりに行うのかを書いてください。代行でなければ空欄で大丈夫です。", "ex": null, "req": false, "var": "service_scope", "type": "長文"}, {"n": 4, "stage": 1, "group": "すでに買ったお客様のこと", "text": "買う前に、お客様がいちばん困っていたことは何ですか。", "ex": null, "req": true, "var": "voc_pain", "type": "長文"}, {"n": 5, "stage": 1, "group": "すでに買ったお客様のこと", "text": "その問題で、お客様にはどんな損失やストレスがありましたか。", "ex": null, "req": false, "var": "voc_loss", "type": "長文"}, {"n": 6, "stage": 1, "group": "すでに買ったお客様のこと", "text": "お客様は、ほかにどんな解決手段を検討していましたか。", "ex": null, "req": false, "var": "voc_alternatives", "type": "長文"}, {"n": 7, "stage": 1, "group": "すでに買ったお客様のこと", "text": "最終的に選んだ決め手は何でしたか。", "ex": null, "req": true, "var": "voc_decider", "type": "長文"}, {"n": 8, "stage": 1, "group": "すでに買ったお客様のこと", "text": "申し込むときに、不安だったことは何でしたか。", "ex": null, "req": false, "var": "voc_anxiety", "type": "長文"}, {"n": 9, "stage": 1, "group": "すでに買ったお客様のこと", "text": "始めてから、数字以外に何が変わりましたか。", "ex": null, "req": false, "var": "voc_change", "type": "長文"}, {"n": 10, "stage": 1, "group": "すでに買ったお客様のこと", "text": "ほかの人に紹介するとしたら、どんなサービスだと説明しますか。", "ex": null, "req": false, "var": "voc_referral", "type": "長文"}, {"n": 11, "stage": 1, "group": "買わなかったお客様と、営業担当のこと", "text": "商談のどの段階で、お客様の関心が下がりましたか。", "ex": null, "req": false, "var": "lost_drop_point", "type": "長文"}, {"n": 12, "stage": 1, "group": "買わなかったお客様と、営業担当のこと", "text": "いちばん多かった懸念は何ですか。", "ex": null, "req": false, "var": "lost_concern", "type": "長文"}, {"n": 13, "stage": 1, "group": "買わなかったお客様と、営業担当のこと", "text": "買わなかったお客様は、どこへ流れましたか。", "ex": null, "req": false, "var": "lost_destination", "type": "選択", "options": ["競合", "自社でやる（内製）", "見送り", "わからない"]}, {"n": 14, "stage": 1, "group": "買わなかったお客様と、営業担当のこと", "text": "どの言い方や事例に、お客様の反応が良かったですか。", "ex": null, "req": false, "var": "good_reaction", "type": "長文"}, {"n": 15, "stage": 1, "group": "買わなかったお客様と、営業担当のこと", "text": "説明しても、わかってもらいにくい点は何ですか。", "ex": null, "req": false, "var": "hard_to_explain", "type": "長文"}, {"n": 16, "stage": 2, "group": null, "text": "対象のお客様は誰ですか。", "ex": null, "req": true, "var": "target", "type": "短文"}, {"n": 17, "stage": 2, "group": null, "text": "そのお客様が、最終的に得たい状態は何ですか。", "ex": null, "req": true, "var": "final_state", "type": "長文"}, {"n": 18, "stage": 2, "group": null, "text": "その状態を実現するために必要な「成功パターン」（進め方の順番）は何ですか。", "ex": null, "req": true, "var": "success_pattern", "type": "長文"}, {"n": 19, "stage": 2, "group": null, "text": "お客様が自力では進めない、今の障害は何ですか。", "ex": null, "req": true, "var": "current_barrier", "type": "長文"}, {"n": 20, "stage": 2, "group": null, "text": "案件の企業の、独自の方法・強みは何ですか。", "ex": null, "req": true, "var": "unique_method", "type": "長文"}, {"n": 21, "stage": 2, "group": null, "text": "どのくらいの期間で目指せますか。案件の企業が言っている期間を書いてください。", "ex": null, "req": false, "var": "period", "type": "短文"}, {"n": 22, "stage": 2, "group": null, "text": "その期間で、どの状態まで目指せますか。", "ex": null, "req": false, "var": "reach_state", "type": "短文"}, {"n": 23, "stage": 2, "group": null, "text": "費用はいくらですか。", "ex": null, "req": false, "var": "price", "type": "短文"}, {"n": 24, "stage": 3, "group": null, "text": "この商品は「何を提供するか」（機能）を書いてください。", "ex": "例：月2回の面談、チャットサポート、動画教材", "req": true, "var": "feature", "type": "長文"}, {"n": 25, "stage": 3, "group": null, "text": "それによって、お客様は「何ができるようになるか」（メリット）を書いてください。", "ex": "例：営業を仕組み化できる、受注数が増える", "req": false, "var": "merit", "type": "長文"}, {"n": 26, "stage": 3, "group": null, "text": "その結果、お客様は「どんな未来・体験を得るか」（ベネフィット）を書いてください。", "ex": "例：経営者が営業現場から離れ、新規事業や採用に時間を使える", "req": true, "var": "benefit", "type": "長文"}, {"n": 27, "stage": 3, "group": null, "text": "「それによって何ができるのか？」を3回くり返して、答えを順に書いてください。数字の成果で止めずに、その先の立場・時間・選択肢まで書きます。", "ex": "例：売上が増える → 安定して人を採用できる → 経営者が現場営業から離れられる → 多店舗化・新規事業・事業売却など、次の経営判断ができる", "req": false, "var": "benefit_chain", "type": "長文"}, {"n": 28, "stage": 3, "group": null, "text": "価格を出す前に見せる、「普通ならこれくらいの費用がかかる」という額を書いてください。", "ex": null, "req": true, "var": "anchor_cost", "type": "短文"}, {"n": 29, "stage": 3, "group": null, "text": "その額に含める、サポートやサービス内容の価値を書いてください。", "ex": null, "req": false, "var": "anchor_value", "type": "長文"}, {"n": 30, "stage": 3, "group": null, "text": "案件の企業が根拠を持っている投資回収の数字を、控えめ・標準・うまくいった場合の3つで書いてください。根拠が無ければ空欄にしてください。", "ex": null, "req": false, "var": "roi_3patterns", "type": "長文"}, {"n": 31, "stage": 4, "group": null, "text": "成功までの手順を、順番に書いてください。各手順の「何をするか／なぜ先にやるか／終わりの条件」も書けると理想です。", "ex": "例：最初にA、次にB、最後にCを行います", "req": false, "var": "roadmap", "type": "長文"}, {"n": 32, "stage": 4, "group": null, "text": "成果を出すために、お客様にお願いする条件（受けられる人の条件）と、見送る条件は何ですか。実際にある条件だけを書いてください。", "ex": null, "req": false, "var": "fit_conditions", "type": "長文"}, {"n": 33, "stage": 4, "group": null, "text": "案件の企業が担当すること、お客様にお願いすること、お客様に確保してもらう時間を書いてください。", "ex": "例：当社がA〜Dを担当し、お客様にはEだけお願いします", "req": false, "var": "role_split", "type": "長文"}, {"n": 34, "stage": 4, "group": null, "text": "会社の信用として出せる事実（年数・支援した数など）と、必ず見せる事例を書いてください。事例は「どんな状態から、何をして、どれくらいで変わったか」で書きます。案件の企業から聞いた事実だけを書いてください。", "ex": null, "req": false, "var": "company_proof", "type": "長文"}, {"n": 35, "stage": 4, "group": null, "text": "支払い方法・支払い条件と、実際にある期限を書いてください。無ければ空欄にしてください。", "ex": null, "req": false, "var": "payment_terms", "type": "長文"}];
+const TEMPLATE = "あなたは、BUKATSU の営業資料の設計担当です。\nこれから渡す「案件の情報」だけを使って、営業資料の設計図を作ってください。\n営業資料は、サービス内容を順番に説明する資料ではありません。\n「この未来を実現するには、この成功パターンが必要で、その手段としてこのサービスを選ぶのが合理的だ」と、お客様が理解できるロジックです。\n骨格は全部のお客様で共通にし、商談ごとに変えるのは、事例・数字・課題の言い方だけにします。\n\n# 案件の情報\n\n## 案件\n- 企業名：{company_name}\n- サービス名：{service_name}\n- 代行する範囲：{service_scope}\n\n## すでに買ったお客様の声（お客様が使った言葉のまま）\n- 買う前にいちばん困っていたこと：{voc_pain}\n- その問題による損失やストレス：{voc_loss}\n- ほかに検討した解決手段：{voc_alternatives}\n- 選んだ決め手：{voc_decider}\n- 申し込むときの不安：{voc_anxiety}\n- 始めてから数字以外に変わったこと：{voc_change}\n- 紹介するときの説明：{voc_referral}\n\n## 買わなかったお客様と営業担当の声\n- 関心が下がった段階：{lost_drop_point}\n- いちばん多かった懸念：{lost_concern}\n- 流れた先：{lost_destination}\n- 反応が良かった言い方・事例：{good_reaction}\n- わかってもらいにくい点：{hard_to_explain}\n\n## お客様が買う理由の材料\n- 対象のお客様：{target}\n- 最終的に得たい状態：{final_state}\n- 成功パターン：{success_pattern}\n- 今の障害：{current_barrier}\n- 独自の方法・強み：{unique_method}\n- 期間：{period}\n- 到達状態：{reach_state}\n\n## 価値の伝え方\n- 機能（何を提供するか）：{feature}\n- メリット（何ができるようになるか）：{merit}\n- ベネフィット（どんな未来・体験を得るか）：{benefit}\n- 「それによって何ができるのか？」のくり返し：{benefit_chain}\n- 価値のアンカー（「普通ならこれくらいの費用がかかる」という額）：{anchor_cost}\n- サポートやサービス内容の価値：{anchor_value}\n- 費用：{price}\n- 投資回収の3パターン（控えめ・標準・うまくいった場合）：{roi_3patterns}\n\n## 毎回変えない部分\n- 成功までの手順：{roadmap}\n- 受けられる人の条件・見送る条件：{fit_conditions}\n- 役割分担と、お客様に確保してもらう時間：{role_split}\n- 会社の信用と、必ず見せる事例：{company_proof}\n- 支払い条件と、実際にある期限：{payment_terms}\n\n# 守ること\n\n1. 「案件の情報」に書かれていない数字・事例・実績・期間・価格は、作らないでください。推測で埋めないでください。\n2. 「（未回答）」の項目や、材料が足りないところは、その場所に「ここは案件の企業に確認してください」と書いてください。それ以外の言葉で埋めないでください。\n3. 根拠のない成果や投資回収を、言い切らないでください。収入や成果の保証になる言い方をしないでください。\n4. 実際には無い締切・定員・審査を作らないでください。\n5. サポート項目の多さで価値を説明しないでください。機能から話し始めず、先にベネフィットを見せ、その手段としてメリットと機能を説明してください。\n6. 冒頭を会社の説明から始めないでください。\n7. 問題提起では、お客様個人の能力不足にせず、進め方や順番の問題として書いてください。\n8. お客様の声は、できるだけお客様が使った言葉のまま、問題提起・ベネフィット・事例・反論への返しに使ってください。\n\n# 作るもの（この順番で出してください）\n\n## 1. お客様が買う理由の一文\n最初に、次の形の一文を作ってください。材料が足りない空欄は「ここは案件の企業に確認してください」と書いてください。\n「【対象のお客様】が【最終的に得たい状態】を実現するには、【成功パターン】が必要です。しかし、【今の障害】があるため自力では難しい。【企業名】は【独自の方法・強み】によって【期間】で【到達状態】を目指せるため、【費用】を投じる合理性があります。」\n一文の後に、この一文の弱いところを1〜3点書いてください。\n\n## 2. 営業資料の設計図（14ステップ）\n次の14ステップを、この順番のまま作ってください。順番を入れ替えたり、ステップを足したり減らしたりしないでください。\n各ステップは表にして、列は「ステップ／章の名前／お客様に持ってもらう認識／スライドに入れる中身／話す一言／商談ごとに差し替える欄／案件の企業に確認すること」にしてください。\n\n| ステップ | 章の名前 | お客様に持ってもらう認識 | 話す一言の型 |\n|---|---|---|---|\n| 1 | サービス名 | 何をしてくれるサービスか分かる | 「当社は○○の代行／伴走型支援を行っています」 |\n| 2 | 成功の定義・ベネフィット | 自分が目指すべきゴールが見える | 「私たちは○○ではなく、最終的に△△の状態を成功と定義しています」 |\n| 3 | サービス・カテゴリの定義 | 提案の判断基準がそろう | 「ここでいう○○とは、単なる□□ではありません」 |\n| 4 | 会社概要・信用 | この会社の話を聞いてよいと判断できる | 「この領域で○年、○社を支援しています」 |\n| 5 | 成功までのロードマップ | 成功が再現可能な手順に見える | 「最初にA、次にB、最後にCを行います」 |\n| 6 | 問題提起 | 今取り組む必要性を感じる | 「多くの方がBから始めるため、Aが欠けて失敗します」 |\n| 7 | 成功状態のメリット | 取り組む価値が具体化する | 「これができると、売上以外にも○○が可能になります」 |\n| 8 | 注意事項・適合条件 | 誰でも受けられるわけではないと理解する | 「成果の再現性を守るため、○○の条件をお願いしています」 |\n| 9 | 独自の強み | ほかではなくこの会社を選ぶ理由ができる | 「一般的な○○との違いは、この3点です」 |\n| 10 | Before／After・事例 | 本当に変化が起きると信じられる | 「始める前は○○でしたが、始めた後は△△になりました」 |\n| 11 | 未来シミュレーション | 自分の場合の時間軸が見える | 「1か月目はA、3か月目はB、6か月目はCを目指します」 |\n| 12 | 支援内容・役割分担 | 必要な労力が分かり、不安が減る | 「当社がA〜Dを担当し、お客様にはEだけお願いします」 |\n| 13 | 価値のアンカー | 普通ならかかる費用と、サポートやサービス内容の価値が分かる | 「普通ならこれくらいの費用がかかります」 |\n| 14 | 価格・投資回収・期限・次の行動 | 価格の妥当性を判断でき、意思決定できる | 「費用は○円です。進める場合は本日○○まで決めます」 |\n\n各ステップで気をつけること\n- ステップ1：抽象的な「コンサルティング」だけにせず、支援内容が連想できる名前にしてください。「代行」なら代わりにやる範囲を書いてください。\n- ステップ5：各手順に「何をするか／なぜ先にやるか／終わりの条件／次の手順へのつながり」を書いてください。\n- ステップ8：実際にある条件だけを書いてください。\n- ステップ9：機能の多さではなく、お客様の成功の確率が上がる理由として書いてください。\n- ステップ10：事例は「どんな状態から、何をして、どれくらいで変わったか」をセットで書いてください。材料に無ければ「ここは案件の企業に確認してください」と書いてください。\n- ステップ11：商談でお客様の今の数字を入れる差し替え欄にしてください。期間や数字は材料にあるものだけを使ってください。\n- ステップ13：価格の前に、価値のアンカーを書いてください。「普通ならこれくらいの費用がかかる」という額と、サポートやサービス内容の価値です。材料に無い数字は作らずに「ここは案件の企業に確認してください」と書いてください。\n- ステップ14：価格を出した後に、投資回収を控えめ・標準・うまくいった場合の3つで示してください。根拠の数字が無ければ作らずに「ここは案件の企業に確認してください」と書いてください。期限は実際にあるものだけを書いてください。\n\n## 3. お金・時間・労力の3つの不安の消し方\n価格を出す前に、3つの不安をどのステップで消すかを表にしてください。\n- お金をかけたくない → ベネフィット・価値のアンカー・投資回収（支払額以上に何を得られるか）\n- 時間をかけたくない → ロードマップ・Before／After・期間シミュレーション（いつ、どの状態まで進めるか）\n- 労力をかけたくない → 役割分担・代行範囲（お客様が実際にやることは何か）\n\n## 4. 出そうな反論と返し\n「いちばん多かった懸念」と「流れた先」をもとに、次の4つのうち当てはまるものについて、返しの言葉を作ってください。\n- 「金額が高いです」→ 予算の問題か、成果が見合うか確信が無いのかを分けて聞く。予算なら支払い条件や開始時期を確認し、価値ならベネフィット・投資回収・事例に戻る\n- 「社内で検討します（家族と相談します）」→ 誰が、どの基準で最終判断するか、そのために必要な資料や数字は何かを聞き、回答日を決める\n- 「今はタイミングではないです」→ いつ頃なら取り組めるか、今始められない理由は何かを聞く。無理に急がせない\n- 「自分（自社）でもできそうです」→ できる可能性は認めたうえで、必要な人・期間・失敗の費用を含めても、それが最適かを一緒に確かめる\n\n## 5. 自己レビュー\n作った設計図を、次のチェックリストで点検してください。各項目に「はい／いいえ」と、その理由を1行で書いてください。「いいえ」の項目は、どのステップをどう直すかも書いてください。\n\n商品のロジック\n- 誰に売るかが一文で明確か\n- お客様の最終的なベネフィットが言葉になっているか\n- 成功の定義が明確か\n- 価格以上の「比べる材料」があるか\n- この会社を選ぶ理由が、お客様の成果と結びついているか\n\n資料の構成\n- 冒頭で会社説明ではなく、ベネフィットを示しているか\n- 成功までのロードマップがあるか\n- 今取り組む必要性につながる問題提起があるか\n- Before／Afterと期間シミュレーションがあるか\n- お客様の役割と必要な時間が分かるか\n- 価格の前に、普通ならかかる費用とサポートやサービス内容の価値を示し、価格の後に投資回収を示しているか\n\n商談で話すとき\n- 冒頭で進め方に合意しているか\n- 今の状態・目標・障害・これまで試したことを確認しているか\n- お客様の言葉を提案に入れているか\n- お金・時間・労力の不安を、価格を出す前に消しているか\n- 懸念と、決めるまでの流れを確認しているか\n- 次の行動と日時を具体的に決めているか\n\nやってはいけないこと\n- 根拠のない成果・投資回収を言い切っていないか\n- 実際には無い締切・定員・審査を作っていないか\n- サポート項目の多さだけで価値を説明していないか\n- 材料に無い数字や事例を作っていないか\n\n## 6. 案件の企業に確認すること\n「ここは案件の企業に確認してください」と書いた場所を、最後に一覧にしてください。それぞれ、どのステップで使うか、企業にどう聞けばよいかを1行で添えてください。";
+
+/* 答えはこのページのメモリの中だけに置きます。保存も送信もしません。 */
+const A = {};
+let cur = {k:"start"};
+let editMode = false;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const Q = n => QS.find(q => q.n === n);
+const WHISTLE = '<svg width="30" height="30" viewBox="0 0 48 48" aria-hidden="true"><circle cx="19" cy="29" r="12" fill="none" stroke="currentColor" stroke-width="3.4"/><path d="M27 20h15v8H30" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linejoin="round"/><circle cx="19" cy="29" r="4" fill="#fff"/><path d="M14 11l3 5M24 9v6M33 11l-2 4" stroke="#141414" stroke-width="3" stroke-linecap="round"/></svg>';
+
+function captain(text, cls){
+  return `<div class="dialog ${cls||""}"><div class="face">${WHISTLE}</div><div class="talk"><div class="speaker">CAPTAIN<small>キャプテン</small></div><p>${esc(text)}</p></div></div>`;
+}
+
+/* 飛ばす問いはありません（全員が35問に答える） */
+function activeQs(){ return QS; }
+
+function hasValue(q){
+  const v = A[q.var];
+  if (Array.isArray(v)) return v.length > 0;
+  return typeof v === "string" && v.trim() !== "";
+}
+function valueText(q){
+  if (!hasValue(q)) return "";
+  const v = A[q.var];
+  return Array.isArray(v) ? q.options.filter(o => v.includes(o)).join("、") : v.trim();
+}
+
+/* 画面の順番 */
+function sequence(){
+  const s = [{k:"start"}];
+  STAGES.forEach(st => {
+    s.push({k:"door", s:st.n});
+    activeQs().filter(q => q.stage === st.n).forEach(q => s.push({k:"q", n:q.n}));
+  });
+  s.push({k:"confirm"}, {k:"done"});
+  return s;
+}
+const same = (a,b) => a.k === b.k && a.s === b.s && a.n === b.n;
+function go(target){ cur = target; render(); }
+function step(d){
+  const s = sequence();
+  let i = s.findIndex(x => same(x, cur));
+  if (i < 0) i = 0;
+  go(s[Math.max(0, Math.min(s.length-1, i+d))]);
+}
+
+function stageOf(){
+  if (cur.k === "door") return cur.s;
+  if (cur.k === "q") return Q(cur.n).stage;
+  if (cur.k === "confirm" || cur.k === "done") return 5;
+  return -1;
+}
+function renderSteps(){
+  const now = stageOf();
+  let h = '<span class="stl">STAGE</span>';
+  STAGES.forEach(st => {
+    const cls = st.n < now ? "done" : (st.n === now ? "now" : "");
+    let pips = "";
+    if (st.n === now && cur.k === "q"){
+      const list = activeQs().filter(q => q.stage === st.n);
+      const idx = list.findIndex(q => q.n === cur.n);
+      if (list.length <= 12) pips = '<span class="pips" aria-hidden="true">' + list.map((q,i) => `<span class="pip ${i<=idx?"on":""}"></span>`).join("") + "</span>";
+    }
+    h += `<span class="step ${cls}" ${st.n===now?'aria-current="step"':""} title="ステージ${st.n}">${st.n}${pips}</span>`;
+  });
+  $("steps").innerHTML = h;
+}
+
+function render(){
+  renderSteps();
+  const el = $("screen");
+  el.className = "screen";
+  if (cur.k === "start") renderStart(el);
+  else if (cur.k === "door") renderDoor(el);
+  else if (cur.k === "q") renderQ(el);
+  else if (cur.k === "confirm") renderConfirm(el);
+  else renderDone(el);
+  window.scrollTo(0,0);
+}
+
+/* 開始画面 */
+function renderStart(el){
+  el.classList.add("center");
+  const s1 = QS.filter(q => q.stage === 1).length;
+  el.innerHTML = `
+    <svg class="mark" width="64" height="64" viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="9" width="28" height="33" rx="3" fill="none" stroke="currentColor" stroke-width="3.2"/><rect x="18" y="5" width="12" height="8" rx="2" fill="#f15820"/><path d="M16 22h16M16 29h16M16 36h9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+    <h1 class="title-h"><span>セルキャン式</span><span><em>営業資料プロンプト</em></span><span>作成ツール</span></h1>
+    <ul class="gets"><li>全${STAGES.length}ステージ・${QS.length}問</li><li>1問ずつ答える</li><li>最後に指示文をコピー</li></ul>
+    ${captain("答えるだけで、売れる営業資料の設計図を作るための指示文ができます。")}
+    <div class="prep">
+      <div class="prep-h"><span class="tag">BEFORE</span>はじめる前に</div>
+      <p>案件の企業の担当者に、ステージ1の質問（${s1}問）を前もって聞いておいてください。</p>
+      <button class="ghost" id="openList" type="button">質問の一覧を見る</button>
+    </div>
+    <p class="small-note">答えはこの画面の中だけで使い、どこにも保存しません。ページを閉じたり再読み込みしたりすると、答えは消えます。</p>
+    <div class="controls" style="width:100%"><button class="primary" id="startBtn" type="button">はじめる<span class="arw">▶</span></button></div>`;
+  $("openList").onclick = openList;
+  $("startBtn").onclick = () => step(1);
+}
+
+/* ステージの扉 */
+function renderDoor(el){
+  const st = STAGES[cur.s];
+  el.classList.add("door");
+  const list = activeQs().filter(q => q.stage === st.n);
+  const m = st.name.match(/^(.+?)(（.+）)$/);
+  const nameH = m ? `${esc(m[1])}<small>${esc(m[2])}</small>` : esc(st.name);
+  el.innerHTML = `
+    <div class="slash" aria-hidden="true"></div>
+    <div class="door-no"><span class="en">STAGE</span><span class="big">${st.n}</span></div>
+    <h2 class="door-h">${nameH}</h2>
+    <div class="door-meta">このステージは<b>${list.length}</b>問です</div>
+    ${st.guide ? captain(st.guide, "guide") : ""}
+    <div class="controls"><button class="ghost" id="back" type="button">戻る</button><span class="spacer"></span><button class="primary" id="next" type="button">次へ<span class="arw">▶</span></button></div>`;
+  $("back").onclick = () => step(-1);
+  $("next").onclick = () => step(1);
+}
+
+/* 各問 */
+function renderQ(el){
+  const q = Q(cur.n);
+  const act = activeQs();
+  const pos = act.findIndex(x => x.n === q.n) + 1;
+  const inStage = act.filter(x => x.stage === q.stage);
+  const sPos = inStage.findIndex(x => x.n === q.n) + 1;
+  const ex = q.ex;
+  let input = "";
+  if (q.type === "選択"){
+    const multi = q.n === 13;
+    const v = A[q.var];
+    input = `<div class="field"><span class="how" id="how">${multi ? "当てはまるものを、いくつでも選べます" : "どちらか1つを選んでください"}</span>
+      <div class="picks" role="${multi?"group":"radiogroup"}" aria-labelledby="qtext">` +
+      q.options.map((o,i) => {
+        const on = multi ? (Array.isArray(v) && v.includes(o)) : v === o;
+        const mm = multi ? null : o.match(/^(.+?)(（.+）)$/);
+        const lbl = mm ? `${esc(mm[1])}<small>${esc(mm[2])}</small>` : esc(o);
+        return `<button type="button" class="pick ${multi?"":"radio"}" role="${multi?"checkbox":"radio"}" aria-checked="${on}" data-i="${i}"><span class="box"></span><span class="lbl">${lbl}</span></button>`;
+      }).join("") + `</div></div>`;
+  } else if (q.type === "短文"){
+    input = `<div class="field"><input type="text" id="inp" aria-labelledby="qtext" autocomplete="off" value="${esc(A[q.var]||"")}"></div>`;
+  } else {
+    input = `<div class="field"><textarea id="inp" aria-labelledby="qtext" rows="8">${esc(A[q.var]||"")}</textarea></div>`;
+  }
+  const isLast = pos === act.length;
+  const nextLabel = editMode ? "確認画面へ戻る" : (isLast ? "答えを確認する" : "次へ");
+  el.innerHTML = `
+    <div class="qbar">
+      <span class="qnum">Q <b>${pos}</b> / ${act.length}</span>
+      <span class="qstage">ステージ${q.stage}　${sPos} / ${inStage.length}</span>
+      <span class="req ${q.req?"must":"opt"}">${q.req?"必須":"任意"}</span>
+    </div>
+    <div class="bar" aria-hidden="true"><i style="width:${Math.round((pos-1)/act.length*100)}%"></i></div>
+    ${q.group ? `<div class="group">${esc(q.group)}</div>` : ""}
+    <div class="dialog"><div class="face">${WHISTLE}</div><div class="talk"><div class="speaker">CAPTAIN<small>キャプテン</small></div><p id="qtext">${esc(q.text)}</p></div></div>
+    ${ex ? `<div class="ex">${esc(ex)}</div>` : ""}
+    ${input}
+    <p class="hint" id="hint"></p>
+    <div class="controls">
+      <button class="ghost" id="back" type="button">戻る</button>
+      <span class="spacer"></span>
+      ${q.req ? "" : `<button class="ghost" id="skip" type="button">あとで確認する（スキップ）</button>`}
+      <button class="primary" id="next" type="button">${nextLabel}<span class="arw">▶</span></button>
+    </div>`;
+
+  const next = $("next"), hint = $("hint");
+  const refresh = () => {
+    const ok = hasValue(q);
+    next.disabled = !ok;
+    hint.textContent = (!ok && q.req) ? "この問いは必須です。答えを入れると「" + nextLabel + "」が押せます。" : "";
+  };
+  if (q.type === "選択"){
+    el.querySelectorAll(".pick").forEach(b => b.onclick = () => {
+      const o = q.options[+b.dataset.i];
+      if (q.n === 13){
+        const v = Array.isArray(A[q.var]) ? A[q.var].slice() : [];
+        const j = v.indexOf(o); j < 0 ? v.push(o) : v.splice(j,1);
+        A[q.var] = v;
+        b.setAttribute("aria-checked", String(j < 0));
+      } else {
+        A[q.var] = o;
+        el.querySelectorAll(".pick").forEach(x => x.setAttribute("aria-checked", String(x === b)));
+      }
+      refresh();
+    });
+  } else {
+    const inp = $("inp");
+    inp.oninput = () => { A[q.var] = inp.value; refresh(); };
+    inp.onkeydown = e => {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === "Enter" && (q.type === "短文" || e.metaKey || e.ctrlKey)){ e.preventDefault(); if (!next.disabled) next.click(); }
+    };
+    setTimeout(() => { try { inp.focus({preventScroll:true}); } catch(_){} }, 0);
+  }
+  refresh();
+  const forward = () => { if (editMode) go({k:"confirm"}); else step(1); };
+  next.onclick = () => { if (hasValue(q)) forward(); };
+  if (!q.req) $("skip").onclick = forward;
+  $("back").onclick = () => { if (editMode) go({k:"confirm"}); else step(-1); };
+  if (editMode) $("back").textContent = "確認画面へ";
+}
+
+/* 確認画面 */
+function renderConfirm(el){
+  editMode = false;
+  const act = activeQs();
+  const blank = act.filter(q => !hasValue(q)).length;
+  let secs = "";
+  let pos = 0;
+  STAGES.forEach(st => {
+    const list = act.filter(q => q.stage === st.n);
+    secs += `<section class="sec"><div class="sec-h"><span class="en">STAGE ${st.n}</span>${esc(st.name)}</div><div class="rows">` +
+      list.map(q => {
+        pos++;
+        const has = hasValue(q);
+        return `<div class="row"><span class="no">${pos}</span><span class="q">${esc(q.text)}</span>
+          <div class="a ${has?"":"empty"}">${has ? esc(valueText(q)) : `<span class="mis ${q.req?"req":""}">未回答</span>`}</div>
+          <button class="ghost fix" type="button" data-n="${q.n}">直す</button></div>`;
+      }).join("") + `</div></section>`;
+  });
+  const reqBlank = act.filter(q => q.req && !hasValue(q)).length;
+  el.innerHTML = `
+    <h2 class="ch">答えの確認</h2>
+    <div class="sum"><span>答えた問い <b>${act.length-blank}</b> / ${act.length}</span><span>未回答 <b>${blank}</b></span></div>
+    ${blank ? `<div class="notice"><span class="mk mis">未回答</span><span>未回答のところは、AIが『案件の企業に確認してください』と返します</span></div>` : ""}
+    ${secs}
+    ${reqBlank ? `<p class="hint" style="color:var(--orange-deep);font-weight:700">必須の問いに未回答があります。「直す」から答えを入れてください。</p>` : ""}
+    <div class="controls sticky"><button class="ghost" id="back" type="button">戻る</button><span class="spacer"></span><button class="primary" id="make" type="button" ${reqBlank?"disabled":""}>指示文を作る<span class="arw">▶</span></button></div>`;
+  el.querySelectorAll(".fix").forEach(b => b.onclick = () => { editMode = true; go({k:"q", n:+b.dataset.n}); });
+  $("back").onclick = () => { const a = activeQs(); go({k:"q", n:a[a.length-1].n}); };
+  $("make").onclick = () => go({k:"done"});
+}
+
+/* 指示文 */
+function buildPrompt(){
+  return TEMPLATE.replace(/\{(\w+)\}/g, (all, v) => {
+    const q = QS.find(x => x.var === v);
+    if (!q) return all;
+    const t = valueText(q);
+    return t === "" ? "（未回答）" : t;
+  });
+}
+function buildPromptHtml(){
+  let out = "", last = 0;
+  TEMPLATE.replace(/\{(\w+)\}/g, (all, v, off) => {
+    out += esc(TEMPLATE.slice(last, off));
+    const q = QS.find(x => x.var === v);
+    const t = q ? valueText(q) : all;
+    out += t === "" ? `<mark class="na">（未回答）</mark>` : `<mark>${esc(t)}</mark>`;
+    last = off + all.length;
+    return all;
+  });
+  return out + esc(TEMPLATE.slice(last));
+}
+
+/* 完成画面 */
+function renderDone(el){
+  const text = buildPrompt();
+  el.innerHTML = `
+    ${captain("これをAIに貼りつけて送るだけです。")}
+    <div class="copybar"><span class="meta">${text.length.toLocaleString("ja-JP")}文字</span><span class="copied" id="copied" role="status"></span></div>
+    <div class="out-wrap"><pre class="out" id="out" tabindex="0" aria-label="完成した指示文">${buildPromptHtml()}</pre></div>
+    <div class="controls sticky"><button class="ghost" id="fix" type="button">答えを直す</button><span class="spacer"></span><button class="primary" id="copy" type="button">指示文をコピー<span class="arw">▶</span></button></div>`;
+  $("fix").onclick = () => go({k:"confirm"});
+  $("copy").onclick = async () => {
+    const ok = await copyText(buildPrompt());
+    $("copied").textContent = ok ? "" : "コピーできませんでした。下の文を長押し（または全選択）してコピーしてください。";
+    if (ok) $("copy").innerHTML = 'コピーしました<span class="arw">✓</span>';
+  };
+}
+
+async function copyText(t){
+  try { if (navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(t); return true; } } catch(_){}
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = t; ta.setAttribute("readonly",""); ta.style.position = "fixed"; ta.style.top = "-1000px"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, t.length);
+    const ok = document.execCommand("copy"); ta.remove(); return ok;
+  } catch(_){ return false; }
+}
+
+/* 質問の一覧 */
+function openList(){
+  const ov = $("overlay");
+  const block = st => {
+    const list = QS.filter(q => q.stage === st.n);
+    let h = `<h3><span class="en">STAGE ${st.n}</span>${esc(st.name)}</h3>`;
+    let g = undefined;
+    list.forEach(q => {
+      if (q.group !== g){ if (g !== undefined) h += "</ol>"; if (q.group) h += `<h4>${esc(q.group)}</h4>`; h += "<ol>"; g = q.group; }
+      h += `<li><span class="no">${q.n}</span><span>${esc(q.text)}</span></li>`;
+    });
+    return h + "</ol>";
+  };
+  ov.innerHTML = `<div class="sheet">
+    <div class="sheet-h"><b id="ovh">質問の一覧</b><button type="button" id="ovClose">閉じる</button></div>
+    <div class="sheet-b">${block(STAGES[1])}
+      <details id="allq"><summary style="cursor:pointer;font-weight:700;font-size:.9rem">ほかのステージの質問も見る</summary>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-top:12px">${STAGES.filter(s => s.n !== 1).map(block).join("")}</div></details>
+    </div>
+    <div class="sheet-f"><span class="copied" id="ovCopied" role="status"></span><button class="ghost" type="button" id="ovCopy">ステージ1の質問をコピー</button></div>
+  </div>`;
+  ov.hidden = false;
+  const close = () => { ov.hidden = true; ov.innerHTML = ""; $("openList") && $("openList").focus(); };
+  $("ovClose").onclick = close;
+  ov.onclick = e => { if (e.target === ov) close(); };
+  ov.onkeydown = e => { if (e.key === "Escape") close(); };
+  $("ovCopy").onclick = async () => {
+    const st = STAGES[1];
+    let t = "ステージ" + st.n + "｜" + st.name + "\n";
+    let g;
+    QS.filter(q => q.stage === 1).forEach(q => { if (q.group !== g){ t += "\n" + q.group + "\n"; g = q.group; } t += q.n + ". " + q.text + "\n"; });
+    $("ovCopied").textContent = (await copyText(t)) ? "コピーしました" : "コピーできませんでした";
+  };
+  $("ovClose").focus();
+}
+
+/* 答えがあるときに閉じようとしたら、消えることを知らせる */
+window.addEventListener("beforeunload", e => {
+  if (QS.some(hasValue)) { e.preventDefault(); e.returnValue = ""; }
+});
+
+render();
+</script>
+</body>
+</html>
